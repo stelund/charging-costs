@@ -4,6 +4,15 @@ from typing import Tuple
 import zaptec
 import requests_cache
 import mgrey
+from rich.console import Console
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+)
+from rich.status import Status
 
 # Install a filesystem cache
 requests_cache.install_cache(
@@ -40,48 +49,99 @@ def parse_quarter(quarter: str) -> Tuple[datetime.datetime, datetime.datetime]:
 
 
 def main(quarter: str = "Q2", charger="all"):
+    console = Console()
     show_charger = charger
+
     try:
         start_date, end_date = parse_quarter(quarter)
+        console.print(f"Querying for {quarter} for [bold]{start_date.date().isoformat()}[/bold] - [bold]{end_date.date().isoformat()}[/bold]\n")
 
-        chargers = zaptec.list_chargers()
+        with Status("Fetching chargers list...", console=console):
+            chargers = zaptec.list_chargers()
 
-        for charger in chargers:
-            if show_charger != "all" and show_charger != charger.get("Name", "Unknown"):
-                continue
+        filtered_chargers = [
+            c
+            for c in chargers
+            if show_charger == "all" or show_charger == c.get("Name", "Unknown")
+        ]
 
-            energy_details, charges_count = zaptec.get_energy_history(
-                charger.get("Id"), start_date, end_date, page_size=50
+        if not filtered_chargers:
+            console.print(
+                f"[yellow]No chargers found matching '{show_charger}'[/yellow]"
             )
-            total_cost = 0.0
-            total_energy = 0.0
-            for energy_detail in energy_details:
-                if energy_detail["Energy"] == 0:
-                    continue
-                dt = datetime.datetime.fromisoformat(energy_detail["Timestamp"])
-                # charged energy is reported every 15 minutes how much was charged before, but we need the price from previous
-                dt = dt - datetime.timedelta(minutes=1)
-                price = mgrey.get_price(dt)
-                energy_detail["Price"] = price
-                cost = energy_detail["Energy"] * price
-                total_energy += energy_detail["Energy"]
-                energy_detail["Cost"] = cost
-                total_cost += cost                
+            return
 
-            print(f"Name: {charger.get('Name', 'Unknown')}")
-            # print(f"Serial: {charger.get('SerialNo', 'Unknown')}")
-            # print(f"Device ID: {charger.get('DeviceId', 'Unknown')}")
-            # print(f"Connection: {online}")
-            # print(f"Operating Mode: {mode}")
-            # print(f"Installation: {charger.get('InstallationName', 'Unknown')}")
-            print(f"Charges: {charges_count}")
-            print(f"Total energy: {total_energy}")
-            print(f"Total cost: {total_cost}")
-            print("-" * 40)
-            # break
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+
+            charger_task = progress.add_task(
+                "Processing chargers...", total=len(filtered_chargers)
+            )
+
+            for charger in filtered_chargers:
+                charger_name = charger.get("Name", "Unknown")
+                progress.update(
+                    charger_task, description=f"Processing {charger_name}..."
+                )
+
+                # Add progress tracking for API pagination
+                fetch_task = progress.add_task(
+                    f"Fetching data for {charger_name}...", total=None
+                )
+
+                energy_details, charges_count = zaptec.get_energy_history(
+                    charger.get("Id"),
+                    start_date,
+                    end_date,
+                    page_size=50,
+                    progress=progress,
+                    task_id=fetch_task,
+                )
+
+                progress.remove_task(fetch_task)
+
+                total_cost = 0.0
+                total_energy = 0.0
+                if energy_details:
+                    energy_task = progress.add_task(
+                        f"Calculating costs for {charger_name}...",
+                        total=len(energy_details),
+                    )
+
+                    for i, energy_detail in enumerate(energy_details):
+                        if energy_detail["Energy"] == 0:
+                            progress.advance(energy_task)
+                            continue
+
+                        dt = datetime.datetime.fromisoformat(energy_detail["Timestamp"])
+                        dt = dt - datetime.timedelta(minutes=1)
+                        price = mgrey.get_price(dt)
+                        energy_detail["Price"] = price
+                        cost = energy_detail["Energy"] * price
+                        total_energy += energy_detail["Energy"]
+                        energy_detail["Cost"] = cost
+                        total_cost += cost
+
+                        progress.advance(energy_task)
+
+                    progress.remove_task(energy_task)
+
+                console.print(f"\n[bold]{charger_name}[/bold]")
+                console.print(f"Charges: {charges_count}")
+                console.print(f"Total energy: {total_energy:.2f} kWh")
+                console.print(f"Total cost: {total_cost:.2f} kr")
+                console.print(f"Average price per kWh {total_cost / total_energy:.2f}")
+                console.print("-" * 40)
+
+                progress.advance(charger_task)
 
     except Exception as e:
-        print(f"Error fetching chargers: {e}")
+        console.print(f"[red]Error fetching chargers: {e}[/red]")
 
 
 if __name__ == "__main__":

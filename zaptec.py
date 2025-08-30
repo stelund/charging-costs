@@ -3,6 +3,7 @@ import requests
 import datetime
 from dotenv import load_dotenv
 from typing import Optional
+from rich.progress import Progress
 
 load_dotenv()
 
@@ -62,12 +63,15 @@ def get_energy_history(
     charger_id: str,
     from_date: datetime.datetime,
     to_date: datetime.datetime,
-    page_size: int = 10,   
+    page_size: int = 10,
+    progress: Optional[Progress] = None,
+    task_id: Optional[int] = None,
 ) -> dict:
     energy_history = []
     charges_count = 0
     page_index = 0
-    while True:        
+
+    while True:
         params = {
             "ChargerId": charger_id,
             "From": from_date.isoformat(),
@@ -88,8 +92,10 @@ def get_energy_history(
 
         page_index += 1
 
-        if body["Pages"] == page_index:
-            break
+        if progress and task_id is not None:
+            progress.advance(task_id)
 
+        if page_index == body["Pages"]:
+            break
 
     return energy_history, charges_count
