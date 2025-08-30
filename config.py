@@ -2,7 +2,6 @@ import os
 import json
 from pathlib import Path
 from getpass import getpass
-from typing import Optional
 
 CONFIG_FILE = Path.home() / ".charging-costs" / "config.json"
 

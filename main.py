@@ -62,7 +62,9 @@ def main(quarter: str = "Q2", charger="all"):
 
     try:
         start_date, end_date = parse_quarter(quarter)
-        console.print(f"Querying for {quarter} for [bold]{start_date.date().isoformat()}[/bold] - [bold]{end_date.date().isoformat()}[/bold]\n")
+        console.print(
+            f"Querying for {quarter} for [bold]{start_date.date().isoformat()}[/bold] - [bold]{end_date.date().isoformat()}[/bold]\n"
+        )
 
         with Status("Fetching chargers list...", console=console):
             chargers = zaptec.list_chargers()
@@ -142,7 +144,7 @@ def main(quarter: str = "Q2", charger="all"):
                 console.print(f"\n[bold]{charger_name}[/bold]")
                 console.print(f"Charges: {charges_count}")
                 console.print(f"Total energy: {total_energy:.2f} kWh")
-                console.print(f"Total cost: {total_cost:.2f} kr")
+                console.print(f"Total cost with hourly rates: {total_cost:.2f} kr")
                 console.print(f"Average price per kWh {total_cost / total_energy:.2f}")
                 console.print("-" * 40)
 
