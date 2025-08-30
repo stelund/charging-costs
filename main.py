@@ -4,6 +4,7 @@ from typing import Tuple
 import zaptec
 import requests_cache
 import mgrey
+import config
 from rich.console import Console
 from rich.progress import (
     Progress,
@@ -49,6 +50,13 @@ def parse_quarter(quarter: str) -> Tuple[datetime.datetime, datetime.datetime]:
 
 
 def main(quarter: str = "Q2", charger="all"):
+    # Check credentials early, before initializing Rich console
+    try:
+        config.get_zaptec_credentials()
+    except Exception as e:
+        print(f"Error with credentials: {e}")
+        return
+
     console = Console()
     show_charger = charger
 

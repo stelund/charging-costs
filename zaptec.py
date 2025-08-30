@@ -1,11 +1,8 @@
-import os
 import requests
 import datetime
-from dotenv import load_dotenv
 from typing import Optional
 from rich.progress import Progress
-
-load_dotenv()
+import config
 
 _token: Optional[str] = None
 
@@ -15,12 +12,8 @@ def get_token() -> str:
     if _token:
         return _token
 
-    username = os.getenv("ZAPTEC_USERNAME")
-    password = os.getenv("ZAPTEC_PASSWORD")
-    base_url = os.getenv("ZAPTEC_BASE_URL", "https://api.zaptec.com")
-
-    if not username or not password:
-        raise ValueError("ZAPTEC_USERNAME and ZAPTEC_PASSWORD must be set in .env file")
+    username, password = config.get_zaptec_credentials()
+    base_url = config.get_zaptec_base_url()
 
     token_url = f"{base_url}/oauth/token"
 
@@ -42,7 +35,7 @@ def get_headers() -> dict[str, str]:
 def make_authenticated_request(
     method: str, endpoint: str, **kwargs
 ) -> requests.Response:
-    base_url = os.getenv("ZAPTEC_BASE_URL", "https://api.zaptec.com")
+    base_url = config.get_zaptec_base_url()
     url = f"{base_url}{endpoint}"
     headers = get_headers()
 
